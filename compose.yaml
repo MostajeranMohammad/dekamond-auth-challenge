@@ -1,0 +1,57 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: pgpass123
+      POSTGRES_DB: auth_challenge
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d auth_challenge -h 127.0.0.1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "redis123"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis123", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: dockerfile
+    environment:
+      HTTP_PORT: "8080"
+      LOG_LEVEL: "info"
+      PG_DSN: "host=postgres user=admin password=pgpass123 dbname=auth_challenge port=5432 sslmode=disable"
+      RUN_MIGRATIONS: "true"
+      REDIS_ADDR: "redis:6379"
+      REDIS_PASSWORD: "redis123"
+      REDIS_DB: "1"
+      JWT_SECRET: "mySecret"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  redis_data:
